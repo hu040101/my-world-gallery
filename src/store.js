@@ -68,6 +68,11 @@ export async function updateCountry(id, newName) {
   }
 }
 
+export async function reorderCountries(newList) {
+  // Save the full list as local overrides
+  await localforage.setItem('countries', newList);
+}
+
 // --- GROUPS ---
 export async function getGroups(countryId) {
   const data = await getStaticData();
@@ -88,6 +93,19 @@ export async function deleteGroup(countryId, groupId) {
   let groups = await localforage.getItem(`groups_${countryId}`) || [];
   groups = groups.filter(g => g.id !== groupId);
   await localforage.setItem(`groups_${countryId}`, groups);
+}
+
+export async function updateGroup(countryId, groupId, newName) {
+  let groups = await localforage.getItem(`groups_${countryId}`) || [];
+  const index = groups.findIndex(g => g.id === groupId);
+  if (index !== -1) {
+    groups[index].name = newName;
+    await localforage.setItem(`groups_${countryId}`, groups);
+  }
+}
+
+export async function reorderGroups(countryId, newList) {
+  await localforage.setItem(`groups_${countryId}`, newList);
 }
 
 // --- IMAGES ---
