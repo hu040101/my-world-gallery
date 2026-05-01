@@ -26,9 +26,12 @@ async function getMerged(key, storageKey) {
   const data = await getStaticData();
   const staticItems = data[key] || [];
   const localItems = await localforage.getItem(storageKey) || [];
+  const deletedIds = await localforage.getItem(`deleted_${storageKey}`) || [];
+  
+  const formattedStatic = staticItems.filter(item => !deletedIds.includes(item.id));
   
   // Combine and deduplicate by ID if necessary (static items win)
-  const combined = [...staticItems];
+  const combined = [...formattedStatic];
   localItems.forEach(local => {
     if (!combined.some(s => s.id === local.id)) {
       combined.push(local);
@@ -50,10 +53,21 @@ export async function addCountry(name) {
 }
 
 export async function deleteCountry(id) {
-  // We can only delete local countries from local storage
+  // 1. Try deleting from local countries
   let countries = await localforage.getItem('countries') || [];
-  countries = countries.filter(c => c.id !== id);
-  await localforage.setItem('countries', countries);
+  const isLocal = countries.some(c => c.id === id);
+  
+  if (isLocal) {
+    countries = countries.filter(c => c.id !== id);
+    await localforage.setItem('countries', countries);
+  } else {
+    // 2. Mark static country as deleted
+    const deletedIds = await localforage.getItem('deleted_countries') || [];
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      await localforage.setItem('deleted_countries', deletedIds);
+    }
+  }
   
   await localforage.removeItem(`images_${id}`);
   await localforage.removeItem(`groups_${id}`);
@@ -78,7 +92,18 @@ export async function getGroups(countryId) {
   const data = await getStaticData();
   const staticGroups = (data.groups || []).filter(g => g.countryId === countryId);
   const localGroups = await localforage.getItem(`groups_${countryId}`) || [];
-  return [...staticGroups, ...localGroups];
+  const deletedIds = await localforage.getItem(`deleted_groups_${countryId}`) || [];
+  
+  const formattedStatic = staticGroups.filter(g => !deletedIds.includes(g.id));
+  
+  // Merge unique
+  const combined = [...formattedStatic];
+  localGroups.forEach(local => {
+    if (!combined.some(s => s.id === local.id)) {
+      combined.push(local);
+    }
+  });
+  return combined;
 }
 
 export async function addGroup(countryId, name) {
@@ -90,9 +115,21 @@ export async function addGroup(countryId, name) {
 }
 
 export async function deleteGroup(countryId, groupId) {
-  let groups = await localforage.getItem(`groups_${countryId}`) || [];
-  groups = groups.filter(g => g.id !== groupId);
-  await localforage.setItem(`groups_${countryId}`, groups);
+  // 1. Try deleting from local groups
+  let localGroups = await localforage.getItem(`groups_${countryId}`) || [];
+  const isLocal = localGroups.some(g => g.id === groupId);
+  
+  if (isLocal) {
+    localGroups = localGroups.filter(g => g.id !== groupId);
+    await localforage.setItem(`groups_${countryId}`, localGroups);
+  } else {
+    // 2. Mark static group as deleted
+    const deletedIds = await localforage.getItem(`deleted_groups_${countryId}`) || [];
+    if (!deletedIds.includes(groupId)) {
+      deletedIds.push(groupId);
+      await localforage.setItem(`deleted_groups_${countryId}`, deletedIds);
+    }
+  }
 }
 
 export async function updateGroup(countryId, groupId, newName) {
