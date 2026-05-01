@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function Lightbox({ image, onClose, onNext, onPrev }) {
+export default function Lightbox({ image, images = [], onClose, onNext, onPrev }) {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -93,7 +93,7 @@ export default function Lightbox({ image, onClose, onNext, onPrev }) {
         <button 
           className="lightbox-nav prev" 
           onClick={(e) => { e.stopPropagation(); onPrev(); }}
-          title="Previous"
+          title="Previous (Left Arrow)"
         >
           ‹
         </button>
@@ -103,11 +103,19 @@ export default function Lightbox({ image, onClose, onNext, onPrev }) {
         <button 
           className="lightbox-nav next" 
           onClick={(e) => { e.stopPropagation(); onNext(); }}
-          title="Next"
+          title="Next (Right Arrow)"
         >
           ›
         </button>
       )}
+
+      {/* Image Counter Overlay */}
+      <div className="lightbox-info">
+        <span className="image-counter">
+          {images.findIndex(img => img.id === image.id) + 1} / {images.length}
+        </span>
+        <span className="close-hint">Esc to close</span>
+      </div>
 
       <div 
         className="lightbox-container" 
