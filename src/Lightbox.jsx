@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Lightbox({ image, images = [], onClose, onNext, onPrev }) {
   const [scale, setScale] = useState(1);
@@ -8,162 +7,102 @@ export default function Lightbox({ image, images = [], onClose, onNext, onPrev }
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef(null);
 
-  // Reset zoom and position when image changes
-  useEffect(() => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-  }, [image?.id]);
+  // Find index for the counter
+  const currentIndex = images.findIndex(img => img.id === image.id);
+  const totalImages = images.length;
 
-  if (!image) return null;
-
-  // Handle Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'ArrowRight') onNext?.();
-      if (e.key === 'ArrowLeft') onPrev?.();
       if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight' && onNext) onNext();
+      if (e.key === 'ArrowLeft' && onPrev) onPrev();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNext, onPrev, onClose]);
+  }, [onClose, onNext, onPrev]);
 
-  // Handle Wheel Zoom
+  // Reset scale/position when image changes
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    
-    const onWheel = (e) => {
-      e.preventDefault();
-      // Determine zoom direction and sensitivity
-      const zoomFactor = -e.deltaY * 0.002;
-      
-      setScale(prev => {
-        let newScale = prev + prev * zoomFactor;
-        // Limit scale between 1x and 8x
-        newScale = Math.min(Math.max(1, newScale), 8); 
-        return newScale;
-      });
-    };
-    
-    // Non-passive listener required to prevent default body scrolling
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [image?.id]); // Re-bind if element changes (though it shouldn't)
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  }, [image.id]);
 
-  // Reset position if zoomed out to 1x
-  useEffect(() => {
-    if (scale <= 1) {
-      setPosition({ x: 0, y: 0 });
-    }
-  }, [scale]);
+  const handleZoom = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.2 : 0.2;
+    setScale(prev => Math.min(Math.max(1, prev + delta), 4));
+  };
 
-  // Handle Dragging
-  const handleMouseDown = (e) => {
-    // Only drag if we are zoomed in
+  const startDrag = (e) => {
     if (scale > 1) {
-      e.preventDefault();
       setIsDragging(true);
-      dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+      dragStart.current = {
+        x: (e.clientX || e.touches[0].clientX) - position.x,
+        y: (e.clientY || e.touches[0].clientY) - position.y
+      };
     }
   };
 
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragStart.current.x,
-      y: e.clientY - dragStart.current.y
-    });
+  const onDrag = (e) => {
+    if (isDragging) {
+      setPosition({
+        x: (e.clientX || e.touches[0].clientX) - dragStart.current.x,
+        y: (e.clientY || e.touches[0].clientY) - dragStart.current.y
+      });
+    }
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  const stopDrag = () => setIsDragging(false);
 
-  const overlayContent = (
+  return (
     <div 
       className="lightbox-overlay" 
-      onClick={onClose}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onClick={(e) => e.target === containerRef.current && onClose()}
+      onWheel={handleZoom}
+      ref={containerRef}
     >
-      <button className="lightbox-close" onClick={onClose} title="Close">✕</button>
-      
-      {onPrev && (
-        <button 
-          className="lightbox-nav prev" 
-          onClick={(e) => { e.stopPropagation(); onPrev(); }}
-          title="Previous (Left Arrow)"
-        >
-          ‹
-        </button>
-      )}
+      <div className="lightbox-controls">
+        <button className="lightbox-close" onClick={onClose}>×</button>
+        {onPrev && <button className="lightbox-nav prev" onClick={onPrev}>‹</button>}
+        {onNext && <button className="lightbox-nav next" onClick={onNext}>›</button>}
+      </div>
 
-      {onNext && (
-        <button 
-          className="lightbox-nav next" 
-          onClick={(e) => { e.stopPropagation(); onNext(); }}
-          title="Next (Right Arrow)"
-        >
-          ›
-        </button>
-      )}
-
-      {/* Image Counter Overlay */}
       <div className="lightbox-info">
-        <span className="image-counter">
-          {images.findIndex(img => img.id === image.id) + 1} / {images.length}
-        </span>
-        <span className="close-hint">Esc to close</span>
+        {totalImages > 0 && (
+          <div className="image-counter">
+            {currentIndex + 1} / {totalImages}
+          </div>
+        )}
+        <div className="close-hint">Esc 退出</div>
       </div>
 
       <div 
-        className="lightbox-container" 
-        ref={containerRef}
-        onClick={(e) => e.stopPropagation()} 
+        className="lightbox-content"
+        style={{ 
+          cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+        }}
+        onMouseDown={startDrag}
+        onMouseMove={onDrag}
+        onMouseUp={stopDrag}
+        onMouseLeave={stopDrag}
+        onTouchStart={startDrag}
+        onTouchMove={onDrag}
+        onTouchEnd={stopDrag}
       >
         <img 
-          key={image.id}
           src={image.url} 
           alt={image.name} 
-          className="lightbox-img"
           draggable="false"
-          onMouseDown={handleMouseDown}
-          onClick={() => {
-            // Click to zoom in if at 1x
-            if (scale === 1) setScale(2.5);
-          }}
-          onDoubleClick={(e) => {
-            // Double click to reset
-            e.stopPropagation();
-            setScale(1);
-          }}
-          style={{ 
+          style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-            cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
-            transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+            transition: isDragging ? 'none' : 'transform 0.3s ease'
           }}
-          title={scale > 1 ? "Drag to pan, scroll to zoom, double-click to reset" : "Click to zoom in, scroll to zoom"}
         />
-      </div>
-      
-      {image.note && (
-        <div 
-          className="museum-placard"
-          onClick={(e) => e.stopPropagation()} // Prevent click from closing lightbox
-          onWheel={(e) => e.stopPropagation()} // Prevent wheel from zooming image
-          onMouseDown={(e) => e.stopPropagation()} // Prevent drag panning from starting on placard
-        >
-          <div className="placard-inner">
-            <div className="placard-pin"></div>
-            <div className="placard-content">
-              {image.note}
-            </div>
-          </div>
+        <div className="lightbox-caption">
+          <h3>{image.name}</h3>
+          {image.description && <p>{image.description}</p>}
         </div>
-      )}
+      </div>
     </div>
   );
-
-  return createPortal(overlayContent, document.body);
 }
