@@ -32,7 +32,7 @@ export default function Gallery({ country, refreshTrigger }) {
     // Revoke old object URLs
     images.forEach(img => {
       // Don't revoke if it's currently in lightbox to avoid breaking it, but ideally we revoke all except active
-      if (img.url) URL.revokeObjectURL(img.url);
+      if (img.url && img.url.startsWith('blob:')) URL.revokeObjectURL(img.url);
     });
 
     const imagesWithUrls = data.map(img => {
@@ -65,7 +65,9 @@ export default function Gallery({ country, refreshTrigger }) {
     setIsSelectMode(false);
     setSelectedImageIds([]);
     return () => {
-      images.forEach(img => URL.revokeObjectURL(img.url));
+      images.forEach(img => {
+        if (img.url && img.url.startsWith('blob:')) URL.revokeObjectURL(img.url);
+      });
     };
   }, [country?.id, refreshTrigger]);
 
@@ -266,6 +268,7 @@ export default function Gallery({ country, refreshTrigger }) {
       {lightboxImage && (
         <Lightbox 
           image={lightboxImage} 
+          images={displayedImages}
           onClose={() => setLightboxImage(null)} 
           onNext={() => {
             const idx = displayedImages.findIndex(img => img.id === lightboxImage.id);
